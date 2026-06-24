@@ -1,5 +1,3 @@
-
-
 // ============================================================
 //  Neurin · Função de atendimento com IA (Vercel Serverless)
 //  Caminho no projeto:  /api/chat.js
