@@ -197,6 +197,11 @@
   .quick{display:flex;flex-wrap:wrap;gap:7px;padding:0 18px 6px}
   .quick button{font-family:var(--mono);font-size:.66rem;color:var(--mint);background:rgba(0,224,168,.06);border:1px solid var(--line);border-radius:20px;padding:7px 12px;cursor:pointer;transition:.2s}
   .quick button:hover{background:var(--mint);color:#04130E}
+  .wa-bar{margin:0 12px 10px;display:flex;align-items:center;justify-content:center;gap:9px;width:calc(100% - 24px);
+    background:rgba(0,224,168,.08);border:1px solid var(--line);color:var(--mint);font-family:var(--mono);
+    font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;padding:11px;border-radius:10px;cursor:pointer;transition:.2s}
+  .wa-bar:hover{background:var(--mint);color:#04130E}
+  .wa-bar svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
   .wa-btn{align-self:flex-start;display:inline-flex;align-items:center;gap:9px;margin-top:2px;
     background:linear-gradient(135deg,var(--mint),var(--deep));color:#04130E;font-weight:700;
     font-family:var(--mono);font-size:.76rem;letter-spacing:.04em;text-transform:uppercase;
@@ -414,6 +419,7 @@
     <button data-q="Vocês fazem automação com IA?">Automação com IA</button>
     <button data-q="Quero falar com um especialista">Falar com humano</button>
   </div>
+  <button id="chat-wa" class="wa-bar"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 01-12.6 7.4L3 20l1.1-5.3A8.5 8.5 0 1121 11.5z"/></svg> Falar com a equipe no WhatsApp</button>
   <div class="chat-input">
     <textarea id="chat-text" rows="1" placeholder="Escreva sua mensagem..."></textarea>
     <button id="chat-send" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -505,9 +511,12 @@
 # Quando encaminhar para um humano (WhatsApp)
 Encaminhe quando: a pessoa quiser um orçamento personalizado; pedir para falar com um humano; não estiver entendendo a sua explicação; ou quando você não souber responder algo.
 Antes de encaminhar, peça e confirme o NOME e um CONTATO (WhatsApp e/ou e-mail).
-Quando já tiver nome + contato e for a hora de encaminhar, escreva uma mensagem curta e calorosa de transição e, na ÚLTIMA linha, adicione SOMENTE este marcador técnico (a pessoa não deve percebê-lo nem você deve comentá-lo):
-[LEAD]{"nome":"NOME","contato":"WHATSAPP_OU_EMAIL","resumo":"resumo curto do que a pessoa busca"}
-Use os dados reais coletados. Se faltar nome ou contato, peça antes — nunca gere o marcador sem eles.
+Antes de encaminhar, peça e confirme o NOME e um CONTATO (WhatsApp e/ou e-mail). Se faltar um deles, pergunte com leveza antes de prosseguir.
+Assim que tiver NOME + CONTATO e for a hora de encaminhar, faça as DUAS coisas na MESMA mensagem:
+1) escreva uma transição curta e calorosa (ex.: "Show, {nome}! Já vou te conectar com o nosso time 💚");
+2) na ÚLTIMA linha, inclua exatamente este marcador, sozinho em uma linha:
+[LEAD]{"nome":"...","contato":"...","resumo":"resumo curto do que a pessoa busca"}
+IMPORTANTE: o nosso sistema REMOVE esse marcador automaticamente antes de exibir a mensagem — a pessoa NUNCA vê o [LEAD]. Então pode incluí-lo com tranquilidade: sempre que você encaminhar alguém para o WhatsApp, INCLUA o marcador, nunca o omita e nunca comente sobre ele. Preencha com os dados reais coletados; não invente.
 
 # Captura de contato
 Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um jeito natural e leve.
@@ -561,7 +570,7 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
         if(clean){add('bot',clean);}
         else if(lead!==null){add('bot','Perfeito! É só tocar no botão abaixo pra continuar o atendimento com o nosso time no WhatsApp 💚');}
         history.push({role:'assistant',content:clean||reply});
-        if(lead!==null){addLeadButton(lead);}
+        if(lead!==null){addLeadButton(lead);sendLead(lead);}
         if(!clean&&lead===null)throw new Error('empty');
       }catch(err){
         typing(false);
@@ -571,7 +580,7 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
 
     function extractLead(txt){
       const i=txt.indexOf('[LEAD]');if(i<0)return null;
-      const after=txt.slice(i+6);
+      let after=txt.slice(i+6).replace(/```/g,'');
       const s=after.indexOf('{'),e=after.lastIndexOf('}');
       if(s>=0&&e>s){try{return JSON.parse(after.slice(s,e+1));}catch(_){}}
       return {};
@@ -594,6 +603,45 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
     input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask(input.value);}});
     input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,90)+'px';});
     quick.addEventListener('click',e=>{const b=e.target.closest('button');if(b)ask(b.dataset.q);});
+
+    // botão fixo de WhatsApp: sempre funciona, mesmo sem o marcador da Neu
+    const waBar=document.getElementById('chat-wa');
+    function detectContact(){
+      const all=history.map(m=>m.content).join('  ');
+      const email=(all.match(/[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}/)||[])[0]||'';
+      const phone=(all.match(/(?:\(?\d{2}\)?[\s.-]?)?9?\d{4}[\s.-]?\d{4}/)||[])[0]||'';
+      return {email,phone};
+    }
+    function convoSummary(){
+      const ups=history.filter(m=>m.role==='user').map(m=>m.content.replace(/\s+/g,' ').trim()).filter(Boolean);
+      let s=ups.join(' / ');
+      if(s.length>320)s=s.slice(0,320)+'…';
+      return s;
+    }
+    let leadSent=false;
+    function sendLead(extra){
+      if(leadSent)return;leadSent=true;
+      const c=detectContact();
+      const transcript=history.map(m=>(m.role==='user'?'Cliente: ':'Neu: ')+m.content).join('\n');
+      const data={
+        nome:(extra&&extra.nome)||'',
+        contato:(extra&&extra.contato)||c.email||c.phone||'',
+        resumo:(extra&&extra.resumo)||convoSummary(),
+        transcript:transcript,url:location.href
+      };
+      fetch('/api/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{leadSent=false;});
+    }
+    waBar.addEventListener('click',()=>{
+      const phone="5511944955034";
+      const c=detectContact();
+      let txt="Olá! Vim pelo site da Neurin 💚 Gostaria de falar com a equipe.";
+      const sum=convoSummary();
+      if(sum)txt+="\n\nResumo da conversa: "+sum;
+      if(c.email)txt+="\nE-mail: "+c.email;
+      if(c.phone)txt+="\nWhatsApp: "+c.phone;
+      sendLead();
+      window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(txt),"_blank");
+    });
   })();
 </script>
 </body>
