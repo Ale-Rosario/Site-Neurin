@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Neurin · Automação, IA, Sistemas e Marketing</title>
-<meta name="description" content="Neurin — automação com inteligência artificial, sistemas e apps sob medida e marketing completo para transformar desafios em oportunidades escaláveis.">
+<meta name="description" content="Neurin — auhtomação com inteligência artificial, sistemas e apps sob medida e marketing completo para transformar desafios em oportunidades escaláveis.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -582,8 +582,8 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
       const i=txt.indexOf('[LEAD]');if(i<0)return null;
       let after=txt.slice(i+6).replace(/```/g,'');
       const s=after.indexOf('{'),e=after.lastIndexOf('}');
-      if(s>=0&&e>s){try{return JSON.parse(after.slice(s,e+1));}catch(_){}}
-      return {};
+      if(s>=0&&e>s){try{const obj=JSON.parse(after.slice(s,e+1));if(obj&&((obj.nome&&obj.nome.trim())||(obj.contato&&obj.contato.trim())))return obj;}catch(_){}}
+      return null;
     }
     function addLeadButton(lead){
       const phone="5511944955034";
@@ -620,7 +620,7 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
     }
     let leadSent=false;
     function sendLead(extra){
-      if(leadSent)return;leadSent=true;
+      if(leadSent)return;
       const c=detectContact();
       const transcript=history.map(m=>(m.role==='user'?'Cliente: ':'Neu: ')+m.content).join('\n');
       const data={
@@ -629,6 +629,8 @@ Sempre que possível, peça nome e WhatsApp e/ou e-mail antes de encerrar, de um
         resumo:(extra&&extra.resumo)||convoSummary(),
         transcript:transcript,url:location.href
       };
+      if(!data.nome.trim()&&!data.contato.trim())return;
+      leadSent=true;
       fetch('/api/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{leadSent=false;});
     }
     waBar.addEventListener('click',()=>{
